@@ -1,3 +1,2 @@
-# Jungle5th_W08_T03
-PintOS
-01. Threads
+# Jungle5th_PintOS_VM_Team2
+화이팅
