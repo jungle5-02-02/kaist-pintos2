@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -54,8 +55,20 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		struct page *page = (struct page *) malloc(sizeof(page));
+
+		bool *initializer;
+		if (type = VM_ANON) initializer = anon_initializer;
+		else initializer = file_backed_initializer;
+
+		uninit_new(page,upage,init,type, aux, initializer);
+
+		///////////// writeable???????? ///////////////
+		///////////////////////////////////////////////
+
 
 		/* TODO: Insert the page into the spt. */
+		return spt_insert_page(spt, page);
 	}
 err:
 	return false;
@@ -67,10 +80,9 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
 	// va로 hash_elem검색을 위한 빈 페이지 생성
-	struct page *binpage = (struct page *) malloc(sizeof(struct page));
-	binpage->va = pg_round_down(va); // pgrounddown은 뒤 12자리를 절삭함으로써 가상주소를 페이지 번호로 바꿔줌
-	struct hash_elem *elem = hash_find(&spt->spt_hash, &binpage->hash_elem);
-	free(binpage);
+	struct page binpage;
+	binpage.va = pg_round_down(va); // pgrounddown은 뒤 12자리를 절삭함으로써 가상주소를 페이지 번호로 바꿔줌
+	struct hash_elem *elem = hash_find(&spt->spt_hash, &binpage.hash_elem);
 	if (elem) page = hash_entry(elem, struct page, hash_elem);
 	return page;
 }
@@ -86,7 +98,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 }
 
 void
-spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+spt_remove1_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
 	return true;
 }
@@ -116,7 +128,7 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
+	struct frame *frame = (struct frame *) malloc(sizeof(struct frame));
 	/* TODO: Fill this function. */
 	void *kva = palloc_get_page(PAL_USER);
 	
@@ -145,7 +157,7 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
@@ -153,7 +165,12 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (is_kernel_vaddr(addr)) return false;
 	page = spt_find_page(spt, addr);
 	if (page == NULL) return false;
-	
+	////////// writeable check?? //////////
+	// if (write) return false;
+	///////////////////////////////////////
+	////////// user??? ///////////
+
+	///////////////////////////////////////
 	//stack growth on demand (call vm_stack_growth)
 	return vm_do_claim_page (page);
 }
@@ -171,7 +188,7 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-	if ((page = spt_find_page(thread_current()->spt))== NULL) return false; 
+	if ((page = spt_find_page(&thread_current()->spt, va))== NULL) return false; 
 	return vm_do_claim_page (page);
 }
 

@@ -65,6 +65,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	bool timestamp;
 };
 
 /* The function table for page operations.
