@@ -753,7 +753,8 @@ setup_stack(struct intr_frame *if_)
 		else
 			palloc_free_page(kpage);
 	}
-	return success;
+	return success;	struct load_segment_aux *load_info = (struct load_segment_aux *) aux;
+	file_seek(load_info->file, load_info->ofs);
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
@@ -785,6 +786,15 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct load_segment_aux *load_info = (struct load_segment_aux *) aux;
+	file_seek(load_info->file, load_info->ofs);
+		/* Load this page. */
+	if (file_read(load_info->file, page->frame->kva, load_info->read_bytes) != (int)load_info->read_bytes)
+	{
+		palloc_free_page(page->frame->kva);
+		return false;
+	}
+	memset(page->frame->kva + load_info->read_bytes, 0, load_info->zero_bytes);
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -818,7 +828,12 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct load_segment_aux *aux = (struct load_segment_aux *) malloc(sizeof(struct load_segment_aux));
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux))
 			return false;
@@ -827,6 +842,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -842,7 +858,9 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-
+	if(vm_alloc_page(VM_ANON | STACK_MARKER, stack_bottom, 1)) {
+		if(success = vm_claim_page(stack_bottom)) if_->rsp = USER_STACK;
+	}
 	return success;
 }
 #endif /* VM */

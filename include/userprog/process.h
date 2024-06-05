@@ -16,3 +16,12 @@ struct file *process_get_file(int fd);
 void process_close_file(int fd);
 
 #endif /* userprog/process.h */
+
+// for load segment
+struct load_segment_aux {
+    struct file *file;
+    off_t ofs;
+    uint32_t read_bytes;
+    uint32_t zero_bytes;
+};
+

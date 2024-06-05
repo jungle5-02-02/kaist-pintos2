@@ -58,14 +58,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		struct page *page = (struct page *) malloc(sizeof(page));
 
 		bool *initializer;
-		if (type = VM_ANON) initializer = anon_initializer;
+		if (VM_TYPE(type) == VM_ANON) initializer = anon_initializer;
 		else initializer = file_backed_initializer;
 
 		uninit_new(page,upage,init,type, aux, initializer);
 
-		///////////// writeable???????? ///////////////
-		///////////////////////////////////////////////
-
+		page->writable = writable;
 
 		/* TODO: Insert the page into the spt. */
 		return spt_insert_page(spt, page);
@@ -200,9 +198,9 @@ vm_do_claim_page (struct page *page) {
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
-
+	
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	pml4_set_page(thread_current()->spt, page->va, frame->kva);
+	pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable);
 	return swap_in (page, frame->kva);
 }
 

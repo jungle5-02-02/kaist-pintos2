@@ -20,6 +20,7 @@ enum vm_type {
 	 * markers, until the value is fit in the int. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
+	STACK_MARKER = (1 << 5),
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -48,7 +49,7 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem hash_elem;
-
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -65,7 +66,8 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
-	bool timestamp;
+	struct hash_elem frame_hash_elem;
+	int accessed;
 };
 
 /* The function table for page operations.
@@ -91,6 +93,10 @@ struct supplemental_page_table {
 	struct hash spt_hash;	
 };
 
+struct frame_table {
+	struct hash ft_hash;
+};
+
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
@@ -113,7 +119,7 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
-#endif  /* VM_VM_H */
-
 uint64_t my_hash_func (const struct hash_elem *e, void *aux);
 bool my_hash_is (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+
+#endif  /* VM_VM_H */
