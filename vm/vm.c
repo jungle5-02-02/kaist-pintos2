@@ -6,6 +6,8 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 
+#include "kernel/hash.h"
+#include "userprog/process.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -49,22 +51,23 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *page = (struct page *) malloc(sizeof(page));
 
-		bool *initializer;
-		if (VM_TYPE(type) == VM_ANON) initializer = anon_initializer;
-		else initializer = file_backed_initializer;
+		// printf("couldn't found spt page. new page malloc ");
+		struct page *page = malloc(sizeof(struct page));
+		// printf("ok\n");
+		printf("this page is pointing to %p\n", page);
+		bool (*page_initializer) (struct page *, enum vm_type, void *);
+		if (VM_TYPE(type) == VM_ANON) page_initializer = anon_initializer;
+		else if (VM_TYPE(type) == VM_FILE) page_initializer = file_backed_initializer;
 
-		uninit_new(page,upage,init,type, aux, initializer);
-
+		uninit_new(page, upage, init, type, aux, page_initializer);
 		page->writable = writable;
-
+		printf("va is now %p\n", page->va);
 		/* TODO: Insert the page into the spt. */
 		return spt_insert_page(spt, page);
 	}
@@ -78,10 +81,19 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
 	// va로 hash_elem검색을 위한 빈 페이지 생성
+	
 	struct page binpage;
 	binpage.va = pg_round_down(va); // pgrounddown은 뒤 12자리를 절삭함으로써 가상주소를 페이지 번호로 바꿔줌
+	
+	// printf("binpage malloc ");
+	// struct page *binpage = malloc(sizeof(page));
+	// printf("ok\n");
+	// binpage->va = pg_round_down(va);
 	struct hash_elem *elem = hash_find(&spt->spt_hash, &binpage.hash_elem);
-	if (elem) page = hash_entry(elem, struct page, hash_elem);
+	// free(binpage);
+	if (elem) {
+		page = hash_entry(elem, struct page, hash_elem);
+	}
 	return page;
 }
 
@@ -91,7 +103,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-	if(hash_insert(&spt->spt_hash, &page->hash_elem)) succ = true;
+	if(!hash_insert(&spt->spt_hash, &page->hash_elem)) succ = true;
 	return succ;
 }
 
@@ -159,10 +171,15 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	printf("given addr is %p\n",addr);
 	if (addr == NULL) return false;
-	if (is_kernel_vaddr(addr)) return false;
+	if (is_kernel_vaddr(addr)) {
+		printf("is kernel addr!\n");
+		return false;}
 	page = spt_find_page(spt, addr);
-	if (page == NULL) return false;
+	if (page == NULL) {
+		printf("can't find page");
+		return false;}
 	////////// writeable check?? //////////
 	// if (write) return false;
 	///////////////////////////////////////
@@ -201,6 +218,7 @@ vm_do_claim_page (struct page *page) {
 	
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable);
+	printf("claim page ok\n");
 	return swap_in (page, frame->kva);
 }
 

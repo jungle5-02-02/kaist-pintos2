@@ -54,7 +54,6 @@ tid_t process_create_initd(const char *file_name) /* NOTE: process_excute() */
 {
 	char *fn_copy;
 	tid_t tid;
-
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page(0);
@@ -81,7 +80,6 @@ initd(void *f_name)
 	supplemental_page_table_init(&thread_current()->spt);
 #endif
 	process_init();
-
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED();
@@ -221,7 +219,6 @@ int process_exec(void *f_name) /* NOTE: 강의의 start_process() */
 	char **parse = malloc(128 * sizeof(char *));
 	strlcpy(parse, file_name, strlen(file_name) + 1);
 	int count = 1;
-
 	for (token = strtok_r(NULL, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
 	{
 		strlcpy(parse + count * sizeof(char *), token, strlen(token) + 1);
@@ -261,7 +258,7 @@ int process_exec(void *f_name) /* NOTE: 강의의 start_process() */
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	_if.R.rsi = _if.rsp + sizeof(void (*)());
 	_if.R.rdi = count;
-
+	
 	/* Start switched process. */
 	do_iret(&_if);
 	NOT_REACHED();
@@ -524,14 +521,13 @@ load(const char *file_name, struct intr_frame *if_)
 	off_t file_ofs;
 	bool success = false;
 	int i;
-
 	// hex_dump(&file_ofs, )
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate(thread_current());
-
+	printf("loading file... file name is %s\n", file_name);
 	/* Open executable file. */
 	file = filesys_open(file_name);
 	if (file == NULL)
@@ -753,8 +749,7 @@ setup_stack(struct intr_frame *if_)
 		else
 			palloc_free_page(kpage);
 	}
-	return success;	struct load_segment_aux *load_info = (struct load_segment_aux *) aux;
-	file_seek(load_info->file, load_info->ofs);
+	return success;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
@@ -786,15 +781,17 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct load_segment_aux *load_info = (struct load_segment_aux *) aux;
+	struct lazy_load_arg *load_info = (struct lazy_load_arg *) aux;
 	file_seek(load_info->file, load_info->ofs);
-		/* Load this page. */
+
+	/* Load this page. */
 	if (file_read(load_info->file, page->frame->kva, load_info->read_bytes) != (int)load_info->read_bytes)
 	{
 		palloc_free_page(page->frame->kva);
 		return false;
 	}
 	memset(page->frame->kva + load_info->read_bytes, 0, load_info->zero_bytes);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -819,6 +816,9 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 
+	printf("readbytes : %d, zerobytes : %d\n", read_bytes, zero_bytes);
+	printf("upage pointing to %p\n", upage);
+	struct lazy_load_arg *aux = (struct lazy_load_arg *) malloc(sizeof(struct lazy_load_arg));
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* Do calculate how to fill this page.
@@ -828,15 +828,22 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		struct load_segment_aux *aux = (struct load_segment_aux *) malloc(sizeof(struct load_segment_aux));
+		// printf("now in load segment\n");
+		// printf("aux malloc");
+		// printf(" ok\n");
+		
 		aux->file = file;
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
+		// printf("now entering wm alloc page w initializer\n");
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage,	writable, lazy_load_segment, aux)) {
+			// free(aux);
+			printf("masaka!!!!!!!!!!!!!!\n");
 			return false;
+		}
+		// free(aux);
+		printf("alloc 1 page ok\n");
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -844,6 +851,8 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		upage += PGSIZE;
 		ofs += page_read_bytes;
 	}
+	// free(aux);
+	printf("load segment completed\n");
 	return true;
 }
 
@@ -861,6 +870,7 @@ setup_stack(struct intr_frame *if_)
 	if(vm_alloc_page(VM_ANON | STACK_MARKER, stack_bottom, 1)) {
 		if(success = vm_claim_page(stack_bottom)) if_->rsp = USER_STACK;
 	}
+	printf("setup stack at rsp : %p\n", if_->rsp);
 	return success;
 }
 #endif /* VM */
