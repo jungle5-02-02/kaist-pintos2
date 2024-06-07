@@ -120,6 +120,9 @@ bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
 uint64_t my_hash_func (const struct hash_elem *e, void *aux);
-bool my_hash_is (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+bool my_hash_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+
+struct frame_table frame_table;
+struct lock frame_table_lock;
 
 #endif  /* VM_VM_H */
