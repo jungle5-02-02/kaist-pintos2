@@ -169,8 +169,10 @@ __do_fork(void *aux)
 	process_activate(current);
 #ifdef VM
 	supplemental_page_table_init(&current->spt);
-	if (!supplemental_page_table_copy(&current->spt, &parent->spt))
-		goto error;
+	if (!supplemental_page_table_copy(&current->spt, &parent->spt)) {
+		printf("something's wrong\n");
+		goto error;}
+	// printf("fork!!!!!!!! %p\n", current->pml4);
 #else
 	if (!pml4_for_each(parent->pml4, duplicate_pte, parent))
 		goto error;
@@ -351,7 +353,7 @@ void process_exit(void)
 		file_close(process_get_file(idx));
 	palloc_free_page(curr->fdt);
 	process_cleanup();
-
+	hash_destroy(&curr->spt.spt_hash, NULL);
 	/* NOTE: [2.3] thread_exit 수정 */
 	/* 부모 프로세스를 대기 상태에서 이탈시킴 (세마포어 이용) */
 	sema_up(&thread_current()->wait_sema);
@@ -366,9 +368,10 @@ static void
 process_cleanup(void)
 {
 	struct thread *curr = thread_current();
-
+	// ASSERT(curr->pml4);
 #ifdef VM
 	supplemental_page_table_kill(&curr->spt);
+	// printf("spt killed\n");
 #endif
 
 	uint64_t *pml4;
@@ -377,6 +380,7 @@ process_cleanup(void)
 	pml4 = curr->pml4;
 	if (pml4 != NULL)
 	{
+		// printf("%p\n", pml4);
 		/* Correct ordering here is crucial.  We must set
 		 * cur->pagedir to NULL before switching page directories,
 		 * so that a timer interrupt can't switch back to the
@@ -779,13 +783,13 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct lazy_load_arg *load_info = (struct lazy_load_arg *) aux;
+	struct file_page *load_info = aux;
 	file_seek(load_info->file, load_info->ofs);
 	/* Load this page. */
 	if (file_read(load_info->file, page->frame->kva, load_info->read_bytes) != (int)load_info->read_bytes)
 	{
 		palloc_free_page(page->frame->kva);
-		// printf("aaaaaaaaaaaaaaaaaaa!!!!!!!!!!!!!!!!!!\n");
+		printf("aaaaaaaaaaaaaaaaaaa!!!!!!!!!!!!!!!!!!\n");
 		return false;
 	}
 	memset(page->frame->kva + load_info->read_bytes, 0, load_info->zero_bytes);
@@ -829,7 +833,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		// printf("now in load segment\n");
 		// printf("aux malloc");
 		// printf(" ok\n");
-		struct lazy_load_arg *aux = (struct lazy_load_arg *)calloc(1,sizeof(struct lazy_load_arg));
+		struct file_page *aux = (struct file_page *)calloc(1,sizeof(struct file_page));
 		aux->file = file;
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;

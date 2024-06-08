@@ -3,6 +3,16 @@
         "thread.h": "c",
         "malloc.h": "c",
         "process.h": "c",
-        "palloc.h": "c"
+        "palloc.h": "c",
+        "*.tcc": "c",
+        "array": "c",
+        "chrono": "c",
+        "istream": "c",
+        "ostream": "c",
+        "ratio": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c",
+        "vm.h": "c"
     }
 }

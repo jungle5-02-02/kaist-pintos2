@@ -125,4 +125,6 @@ bool my_hash_less (const struct hash_elem *a, const struct hash_elem *b, void *a
 struct frame_table frame_table;
 struct lock frame_table_lock;
 
+void hash_page_kill (struct hash_elem *hash_elem, void *aux);
+
 #endif  /* VM_VM_H */

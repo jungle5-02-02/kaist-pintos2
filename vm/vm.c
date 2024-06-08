@@ -8,6 +8,8 @@
 
 #include "kernel/hash.h"
 #include "userprog/process.h"
+#include <string.h>
+#include "vm/file.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -87,16 +89,16 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	/* TODO: Fill this function. */
 	// va로 hash_elem검색을 위한 빈 페이지 생성
 	
-	struct page binpage;
-	binpage.va = pg_round_down(va); // pgrounddown은 뒤 12자리를 절삭함으로써 가상주소를 페이지 번호로 바꿔줌
-	struct hash_elem e;
-	binpage.hash_elem = e;
+	// struct page binpage;
+	// binpage.va = pg_round_down(va); // pgrounddown은 뒤 12자리를 절삭함으로써 가상주소를 페이지 번호로 바꿔줌
+	// struct hash_elem e;
+	// binpage.hash_elem = e;
 	// printf("binpage malloc ");
-	// struct page *binpage = malloc(sizeof(page));
+	struct page *binpage = malloc(sizeof(page));
 	// printf("ok\n");
-	// binpage->va = pg_round_down(va);
-	struct hash_elem *elem = hash_find(&spt->spt_hash, &binpage.hash_elem);
-	// free(binpage);
+	binpage->va = pg_round_down(va);
+	struct hash_elem *elem = hash_find(&spt->spt_hash, &binpage->hash_elem);
+	free(binpage);
 	if (elem) {
 		page = hash_entry(elem, struct page, hash_elem);
 	}
@@ -232,7 +234,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 	
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable);
+	if(!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable)) PANIC(printf("pml4 set failed!!!!\n"));
 	// printf("current pml4 : %p\n", thread_current()->pml4);
 	// printf("claim page ok. va : %p, kva : %p\n", page->va, frame->kva);
 	return swap_in (page, frame->kva);
@@ -248,6 +250,57 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	struct hash *src_hash = &src->spt_hash;
+	ASSERT(!hash_empty(src_hash));
+	struct hash_iterator h_iter;
+	hash_first(&h_iter, src_hash);
+
+	while (hash_next(&h_iter)) {
+		struct page *srcpage = hash_entry(hash_cur(&h_iter), struct page, hash_elem);
+		void *va = srcpage->va;
+		enum vm_type type = srcpage->operations->type;
+		bool writable = srcpage->writable;
+		switch (VM_TYPE(type))
+		{
+		case VM_UNINIT :
+		{
+			vm_initializer *init = srcpage->uninit.init;
+			void *aux = srcpage->uninit.aux;
+			if(!vm_alloc_page_with_initializer(type, va, writable, init, aux)) {printf("child VM UNINIT fail\n"); return false;}
+			break;
+		}
+		case VM_ANON : 
+		{
+			if(!vm_alloc_page_with_initializer(type, va, writable, NULL, NULL)) {printf("child VM ANON fail\n"); return false;}
+			if(!vm_claim_page(va)) {printf("ANON claim fail\n"); return false;}
+			memcpy(spt_find_page(dst, va)->frame->kva, srcpage->frame->kva, PGSIZE);
+			break;
+		}
+		case VM_FILE : 
+		{
+			// vm_initializer *init = file_backed_initializer;
+			struct file_page srcaux = srcpage->file;
+			struct file_page *file_aux = (struct file_page *) malloc(sizeof(struct file_page));
+			file_aux->file = srcaux.file;
+			file_aux->ofs = srcaux.ofs;
+			file_aux->read_bytes = srcaux.read_bytes;
+			file_aux->zero_bytes = srcaux.zero_bytes;
+
+			if(!vm_alloc_page_with_initializer(type, va, writable, NULL, file_aux)) {printf("child VM FILE fail\n"); return false;}
+			struct page *newpage = spt_find_page(dst, va);
+			ASSERT(newpage->va == va);
+			file_backed_initializer(newpage, type, NULL);
+			newpage->frame = srcpage->frame;
+			// printf("current pml4 : %p\n", thread_current()->pml4);
+			if(!pml4_set_page(thread_current()->pml4, va, srcpage->frame->kva, srcpage->writable)) {printf("pml4 fail\n"); return false;}
+			break;
+		}
+		default:
+			PANIC(printf("no type???"));
+			break;
+		}
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -255,6 +308,9 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	// ASSERT(!hash_empty(&spt->spt_hash));
+	// printf("killing spt\n");
+	hash_clear(&spt->spt_hash, hash_page_kill);
 }
 
 
@@ -268,4 +324,10 @@ bool my_hash_less (const struct hash_elem *a, const struct hash_elem *b, void *a
 	struct page *pageb = hash_entry(b, struct page, hash_elem);
 	if (pagea->va < pageb -> va) return true;
 	else return false;
+}
+
+void hash_page_kill (struct hash_elem *elem, void *aux) {
+	struct page *page = hash_entry(elem, struct page, hash_elem);
+	destroy(page);
+	free(page);
 }

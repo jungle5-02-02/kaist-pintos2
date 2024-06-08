@@ -18,11 +18,4 @@ void process_close_file(int fd);
 // for load segment
 static bool lazy_load_segment(struct page *page, void *aux);
 
-struct lazy_load_arg {
-    struct file *file;
-    off_t ofs;
-    uint32_t read_bytes;
-    uint32_t zero_bytes;
-};
-
 #endif /* userprog/process.h */
