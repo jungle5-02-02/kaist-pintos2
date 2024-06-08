@@ -249,6 +249,7 @@ list_remove (struct list_elem *elem) {
    Undefined behavior if LIST is empty before removal. */
 struct list_elem *
 list_pop_front (struct list *list) {
+	// ASSERT(!list_empty(list));
 	struct list_elem *front = list_front (list);
 	list_remove (front);
 	return front;

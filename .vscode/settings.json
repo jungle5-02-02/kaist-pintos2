@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "thread.h": "c",
+        "malloc.h": "c",
+        "process.h": "c",
+        "palloc.h": "c"
+    }
+}
