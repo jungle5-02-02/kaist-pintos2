@@ -7,6 +7,13 @@ struct page;
 enum vm_type;
 
 struct file_page {
+	// 2.6 file_page에 멤버 추가
+	struct file* file;
+	off_t ofs;
+	uint32_t read_bytes;
+    uint32_t zero_bytes;
+	bool mmap_start;
+	struct list_elem elem;
 };
 
 void vm_file_init (void);

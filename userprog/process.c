@@ -782,11 +782,27 @@ install_page(void *upage, void *kpage, bool writable)
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
+	// 2.3 lazy_load_segment 함수 구현
 	/* TODO: Load the segment from the file */
+	struct file_loader *file_loader = (struct file_loader*)aux;
+	struct file *file = file_loader->file;
+	off_t ofs = file_loader->ofs;
+	uint8_t *upage = page->va;
+	uint32_t page_read_bytes = file_loader->page_read_bytes;
+	uint32_t page_zero_bytes = file_loader->page_zero_bytes;
+	
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-}
+	if(file_read_at(file, page->frame->kva, page_read_bytes, ofs) != (int)page_read_bytes){
+		free_frame(page->frame);
+		free(file_loader);
+		return false;
+	}
+	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+	// free(file_loader); -> page-merge-par 수정
 
+	return true;
+}
 /* Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
  * memory are initialized, as follows:
@@ -805,44 +821,57 @@ static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT(pg_ofs(upage) == 0);
-	ASSERT(ofs % PGSIZE == 0);
-
-	while (read_bytes > 0 || zero_bytes > 0)
-	{
+	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+	ASSERT (pg_ofs (upage) == 0);
+	ASSERT (ofs % PGSIZE == 0);
+	// 2.2 load_segment 함수 구현
+	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE; // PGSIZE만큼만 읽어옴
+		size_t page_zero_bytes = PGSIZE - page_read_bytes; // 실제로 읽어들일 바이트 수를 뺀 나머지 부분은 0으로 초기화
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
-			return false;
+		
+		struct file_loader *file_loader = malloc(sizeof(struct file_loader));
+		file_loader->page_read_bytes = page_read_bytes; // 페이지에 실제로 읽어들일 바이트 수
+		file_loader->page_zero_bytes = page_zero_bytes; // 페이지에 0으로 초기화할 바이트 수
+		file_loader->ofs = ofs; // 파일 오프셋
+		file_loader->file = file; // 파일 포인터
 
+		if (!vm_alloc_page_with_initializer (VM_ANON | VM_MARKER_CODE, upage, // 익명 페이지 할당
+					writable, lazy_load_segment, file_loader)){ // lazy loading을 위한 함수와 데이터 전달
+			free(file_loader); // 할당 실패시 자원 해제
+			return false;
+		}
 		/* Advance. */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
-		upage += PGSIZE;
+		read_bytes -= page_read_bytes; // 읽어들인 바이트 수 갱신
+		zero_bytes -= page_zero_bytes; // 초기화할 바이트 수 갱신
+		upage += PGSIZE; // 페이지 주소 갱신(다음 페이지)
+		ofs += page_read_bytes; // 오프셋 갱신
 	}
 	return true;
 }
-
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack(struct intr_frame *if_)
 {
-	bool success = false;
-	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
+    bool success = false;
+    void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	
+	// 2.4 setup_stack 함수 구현
+	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true)){ // 스택 최하단 페이지 할당
+		return false;
+	}
+	if (!vm_claim_page(stack_bottom)) { // 스택 최하단 페이지 
+		vm_dealloc_page(stack_bottom);
+		return false;
+	}
+	
+	if_->rsp = USER_STACK; // 스택 포인터를 유저스택으로 설정
+	success = true;
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
-	/* TODO: Your code goes here */
-
-	return success;
+    return success;
 }
 #endif /* VM */
+
