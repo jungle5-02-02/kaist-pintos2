@@ -152,6 +152,8 @@ struct thread
 	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */
+	// 3.1 thread 구조체에 rsp 추가
+	void *rsp;
 };
 
 /* If false (default), use round-robin scheduler.

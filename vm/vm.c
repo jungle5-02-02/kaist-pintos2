@@ -25,6 +25,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	// 1.8 frame_list 초기화
+	list_init(&frame_list);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -108,10 +110,8 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	
 	target_page->va = va; // 임시 구조체의 va 속성을 페이지의 va로 설정
 
-	
 	struct hash_elem *elem = hash_find(&spt->pages, &target_page->hash_elem); // spt에서 find
 
-	
 	free(target_page); // 임시 구조체 메모리 해제
 	
 	if (elem != NULL) {
@@ -191,7 +191,8 @@ vm_get_frame (void) {
 	}
 
 	frame->page = NULL;
-	list_push_back(&frame_list,&frame->frame_elem);
+    list_push_back(&frame_list, &frame->frame_elem);
+
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -200,6 +201,15 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	// 3.2 vm_stack_growth 구현
+	void* page_addr=addr;
+	struct page* page = spt_find_page(&thread_current()->spt, page_addr);
+	while(page == NULL){
+		vm_alloc_page(VM_ANON, page_addr, true);
+		page_addr+= PGSIZE;
+		page = spt_find_page(&thread_current()->spt, page_addr);
+	}
+		vm_claim_page(addr);
 }
 
 /* Handle the fault on write_protected page */
@@ -215,8 +225,24 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-
-	return vm_do_claim_page (page);
+	// 3.1 vm_try_handle_fault 구현
+	page = spt_find_page(spt, addr);
+	if(user)
+		thread_current()->rsp = f->rsp;
+	
+	if(page != NULL){
+		if(!write || page->writable){
+			return vm_do_claim_page (page);
+		} 
+	}
+	else if(USER_STACK >= addr && addr >= USER_STACK - (1<<20) && addr == thread_current()->rsp-8){
+		vm_stack_growth(pg_round_down(addr));
+		return true;
+	}else if(USER_STACK >= addr && addr >= USER_STACK - (1<<20) && addr >= thread_current()->rsp){
+		vm_stack_growth(pg_round_down(addr));
+		return true;
+	}
+	return false;
 }
 
 /* Free the page.
