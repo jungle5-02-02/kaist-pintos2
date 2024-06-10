@@ -172,6 +172,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	vm_alloc_page_with_initializer(VM_ANON|STACK_MARKER, pg_round_down(addr), 1, NULL, NULL);
 }
 
 /* Handle the fault on write_protected page */
@@ -200,10 +201,19 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	////////// writeable check?? //////////
 	// if (write) return false;
 	///////////////////////////////////////
-	////////// user??? ///////////
 
 	///////////////////////////////////////
 	//stack growth on demand (call vm_stack_growth)
+	uintptr_t stack_pointer;
+	if (!user) stack_pointer = thread_current()->rsp_buf;
+	else stack_pointer = f->rsp;
+
+	if (stack_pointer < (USER_STACK - 1<<20)) {
+		// printf("stack over!!!\n");
+		// return false;
+	}
+	else if (addr == (stack_pointer-8) || addr > stack_pointer) vm_stack_growth(addr);
+
 	return vm_do_claim_page (page);
 }
 
@@ -266,7 +276,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		{
 			vm_initializer *init = srcpage->uninit.init;
 			void *aux = srcpage->uninit.aux;
-			if(!vm_alloc_page_with_initializer(VM_ANON, va, writable, init, aux)) {printf("child VM UNINIT fail\n"); return false;}
+			if(!vm_alloc_page_with_initializer(srcpage->uninit.type, va, writable, init, aux)) {printf("child VM UNINIT fail\n"); return false;}
 			break;
 		}
 		case VM_ANON : 
@@ -286,10 +296,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			file_aux->read_bytes = srcaux.read_bytes;
 			file_aux->zero_bytes = srcaux.zero_bytes;
 
-			if(!vm_alloc_page_with_initializer(type, va, writable, NULL, file_aux)) {printf("child VM FILE fail\n"); return false;}
+			if(!vm_alloc_page_with_initializer(type, va, writable, lazy_load_segment, file_aux)) {printf("child VM FILE fail\n"); return false;}
 			struct page *newpage = spt_find_page(dst, va);
 			ASSERT(newpage->va == va);
-			file_backed_initializer(newpage, type, NULL);
+			uninit_initialize(newpage, NULL);
 			newpage->frame = srcpage->frame;
 			// printf("current pml4 : %p\n", thread_current()->pml4);
 			if(!pml4_set_page(thread_current()->pml4, va, srcpage->frame->kva, srcpage->writable)) {printf("pml4 fail\n"); return false;}

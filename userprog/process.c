@@ -777,7 +777,7 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool
+bool
 lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
@@ -810,7 +810,7 @@ lazy_load_segment(struct page *page, void *aux)
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
-static bool
+bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
@@ -840,11 +840,10 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		aux->zero_bytes = page_zero_bytes;
 		// printf("now entering wm alloc page w initializer\n");
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,	writable, lazy_load_segment, aux)) {
-			// free(aux);
+			free(aux);
 			// printf("masaka!!!!!!!!!!!!!!\n");
 			return false;
 		}
-		// free(aux);
 		// printf("alloc 1 page ok\n");
 
 		/* Advance. */
@@ -853,7 +852,6 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		upage += PGSIZE;
 		ofs += page_read_bytes;
 	}
-	// free(aux);
 	// printf("load segment completed\n");
 	return true;
 }

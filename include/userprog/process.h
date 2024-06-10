@@ -16,6 +16,6 @@ struct file *process_get_file(int fd);
 void process_close_file(int fd);
 
 // for load segment
-static bool lazy_load_segment(struct page *page, void *aux);
+bool lazy_load_segment(struct page *page, void *aux);
 
 #endif /* userprog/process.h */
