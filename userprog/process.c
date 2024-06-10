@@ -833,13 +833,13 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		// printf("now in load segment\n");
 		// printf("aux malloc");
 		// printf(" ok\n");
-		struct file_page *aux = (struct file_page *)calloc(1,sizeof(struct file_page));
+		struct file_page *aux = (struct file_page *)calloc(1, sizeof(struct file_page));
 		aux->file = file;
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
 		// printf("now entering wm alloc page w initializer\n");
-		if (!vm_alloc_page_with_initializer(VM_FILE, upage,	writable, lazy_load_segment, aux)) {
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage,	writable, lazy_load_segment, aux)) {
 			// free(aux);
 			// printf("masaka!!!!!!!!!!!!!!\n");
 			return false;

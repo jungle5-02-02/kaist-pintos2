@@ -266,7 +266,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		{
 			vm_initializer *init = srcpage->uninit.init;
 			void *aux = srcpage->uninit.aux;
-			if(!vm_alloc_page_with_initializer(type, va, writable, init, aux)) {printf("child VM UNINIT fail\n"); return false;}
+			if(!vm_alloc_page_with_initializer(VM_ANON, va, writable, init, aux)) {printf("child VM UNINIT fail\n"); return false;}
 			break;
 		}
 		case VM_ANON : 
