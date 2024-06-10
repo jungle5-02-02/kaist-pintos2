@@ -178,31 +178,42 @@ vm_handle_wp (struct page *page UNUSED) {
 }
 
 /* Return true on success */
-bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
-	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
-	addr = pg_round_down(addr);
-	// printf("given addr is %p\n",addr);
-	if (addr == NULL) return false;
-	if (is_kernel_vaddr(addr)) {
-		// printf("is kernel addr!\n");
-		return false;}
-	page = spt_find_page(spt, addr);
-	if (page == NULL) {
-		// printf("can't find page\n");
-		return false;}
-	////////// writeable check?? //////////
-	// if (write) return false;
-	///////////////////////////////////////
-	////////// user??? ///////////
+bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
+                         bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
+{
+    struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
+    struct page *page = NULL;
 
-	///////////////////////////////////////
-	//stack growth on demand (call vm_stack_growth)
-	return vm_do_claim_page (page);
+    if (addr == NULL)
+        return false;
+
+    if (is_kernel_vaddr(addr))
+        return false;
+
+    if (not_present) // 페이지 폴트가 발생하고, 물리 페이지가 없는 경우
+    {
+        void *rsp = user ? f->rsp : thread_current()->rsp;
+
+        // 스택 확장 여부를 판단하는 조건문 간소화
+        if (rsp >= USER_STACK - (1 << 20) && addr <= USER_STACK && (rsp - 8 == addr || rsp == addr))
+        {
+            // 스택 확장을 위해 vm_stack_growth 호출
+            vm_stack_growth(addr);
+        }
+
+        // 페이지가 보조 페이지 테이블에 존재하는지 확인
+        page = spt_find_page(spt, addr);
+        if (page == NULL)
+            return false;
+
+        // 쓰기 가능한 페이지인지 확인
+        if (write && !page->writable)
+            return false;
+
+        // 페이지 클레임 수행
+        return vm_do_claim_page(page);
+    }
+    return false; // 페이지 폴트가 아닌 경우
 }
 
 /* Free the page.
@@ -248,6 +259,58 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	// TODO: 보조 페이지 테이블을 src에서 dst로 복사합니다.
+	// TODO: src의 각 페이지를 순회하고 dst에 해당 entry의 사본을 만듭니다.
+	// TODO: uninit page를 할당하고 그것을 즉시 claim해야 합니다.
+	struct hash_iterator i;
+	hash_first(&i, &src->spt_hash);
+	while (hash_next(&i))
+	{
+		// src_page 정보
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		enum vm_type type = src_page->operations->type;
+		void *upage = src_page->va;
+		bool writable = src_page->writable;
+
+		/* 1) type이 uninit이면 */
+		if (type == VM_UNINIT)
+		{ // uninit page 생성 & 초기화
+			vm_initializer *init = src_page->uninit.init;
+			void *aux = src_page->uninit.aux;
+			vm_alloc_page_with_initializer(VM_ANON, upage, writable, init, aux);
+			continue;
+		}
+
+		/* 2) type이 file이면 */
+		if (type == VM_FILE)
+		{
+			struct lazy_load_arg *file_aux = malloc(sizeof(struct lazy_load_arg));
+			file_aux->file = src_page->file.file;
+			file_aux->ofs = src_page->file.ofs;
+			file_aux->read_bytes = src_page->file.read_bytes;
+			file_aux->zero_bytes = src_page->file.zero_bytes;
+			if (!vm_alloc_page_with_initializer(type, upage, writable, NULL, file_aux))
+				return false;
+			struct page *file_page = spt_find_page(dst, upage);
+			file_backed_initializer(file_page, type, NULL);
+			file_page->frame = src_page->frame;
+			pml4_set_page(thread_current()->pml4, file_page->va, src_page->frame->kva, src_page->writable);
+			continue;
+		}
+
+		/* 3) type이 anon이면 */
+		if (!vm_alloc_page(type, upage, writable)) // uninit page 생성 & 초기화
+			return false;						   // init이랑 aux는 Lazy Loading에 필요. 지금 만드는 페이지는 기다리지 않고 바로 내용을 넣어줄 것이므로 필요 없음
+
+		// vm_claim_page으로 요청해서 매핑 & 페이지 타입에 맞게 초기화
+		if (!vm_claim_page(upage))
+			return false;
+
+		// 매핑된 프레임에 내용 로딩
+		struct page *dst_page = spt_find_page(dst, upage);
+		memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -255,6 +318,14 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_clear(&spt->spt_hash, hash_page_destroy);
+}
+
+void
+supplemental_page_table_free (struct supplemental_page_table *spt ) {
+	//TODO: Destroy all the supplemental_page_table hold by thread and
+	 //TODO: writeback all the modified contents to the storage. 
+	hash_destroy(&spt->spt_hash, hash_page_destroy);
 }
 
 
@@ -268,4 +339,11 @@ bool my_hash_less (const struct hash_elem *a, const struct hash_elem *b, void *a
 	struct page *pageb = hash_entry(b, struct page, hash_elem);
 	if (pagea->va < pageb -> va) return true;
 	else return false;
+}
+
+void hash_page_destroy(struct hash_elem *e, void *aux)
+{
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	destroy(page);
+	free(page);
 }
