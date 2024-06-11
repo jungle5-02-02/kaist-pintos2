@@ -198,13 +198,12 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (page == NULL) {
 		// printf("can't find page\n");
 		return false;}
-	////////// writeable check?? //////////
-	// if (write) return false;
-	///////////////////////////////////////
+
+	if (page->writable == false && write == true) return false;
 
 	///////////////////////////////////////
 	//stack growth on demand (call vm_stack_growth)
-	uintptr_t stack_pointer;
+	void *stack_pointer;
 	if (!user) stack_pointer = thread_current()->rsp_buf;
 	else stack_pointer = f->rsp;
 
@@ -212,7 +211,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		// printf("stack over!!!\n");
 		// return false;
 	}
-	else if (addr == (stack_pointer-8) || addr > stack_pointer) vm_stack_growth(addr);
+	else if ((addr == (stack_pointer-8) && addr < USER_STACK) || (addr > stack_pointer && addr < USER_STACK)) vm_stack_growth(addr);
 
 	return vm_do_claim_page (page);
 }

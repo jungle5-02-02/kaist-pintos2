@@ -14,6 +14,7 @@
         "type_traits": "c",
         "utility": "c",
         "vm.h": "c",
-        "file.h": "c"
+        "file.h": "c",
+        "vaddr.h": "c"
     }
 }
