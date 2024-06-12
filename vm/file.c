@@ -94,7 +94,7 @@ do_mmap (void *addr, size_t length, int writable,
 			return NULL;
 
 		struct page *p = spt_find_page(&thread_current()->spt, start_addr);
-		p->mapped_page_count = total_page_count;
+		p->mapped_page_count = total_page_count; // munmap에서 매핑을 해제할 때 모든 페이지를 해제하기 위해 필요함
 
 		/* Advance. */
 		// 읽은 바이트와 0으로 채운 바이트를 추적하고 가상 주소를 증가시킵니다.
