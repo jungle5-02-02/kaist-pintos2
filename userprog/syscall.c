@@ -83,7 +83,7 @@ void syscall_handler(struct intr_frame *f)
 	// NOTE: [2.X] Your implementation goes here.
 	/* TODO: [2.5] fork 추가 */
 	uint64_t syscall_num = f->R.rax;
-
+	thread_current()->rsp = f->rsp;
 	switch (syscall_num)
 	{
 	case SYS_HALT: // 0
