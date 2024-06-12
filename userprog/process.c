@@ -733,7 +733,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
 static bool
-setup_stack(struct intr_frame *if_)
+(struct intr_frame *if_)
 {
 	uint8_t *kpage;
 	bool success = false;
@@ -773,7 +773,7 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool
+bool
 lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
@@ -835,7 +835,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
 		// printf("now entering wm alloc page w initializer\n");
-		if (!vm_alloc_page_with_initializer(VM_FILE, upage,	writable, lazy_load_segment, aux)) {
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage,	writable, lazy_load_segment, aux)) {
 			// free(aux);
 			// printf("masaka!!!!!!!!!!!!!!\n");
 			return false;

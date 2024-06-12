@@ -50,6 +50,7 @@ struct page {
 	/* Your implementation */
 	struct hash_elem hash_elem;
 	bool writable;
+	int mapped_page_count; // file_backed_page인 경우, 매핑에 사용한 페이지 개수 (매핑 해제 시 사용)
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -121,6 +122,8 @@ enum vm_type page_get_type (struct page *page);
 
 uint64_t my_hash_func (const struct hash_elem *e, void *aux);
 bool my_hash_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+
+void hash_page_destroy(struct hash_elem *e, void *aux);
 
 struct frame_table frame_table;
 struct lock frame_table_lock;
