@@ -84,6 +84,8 @@ void syscall_handler(struct intr_frame *f)
 	/* TODO: [2.5] fork 추가 */
 	uint64_t syscall_num = f->R.rax;
 
+	thread_current()->rsp = f->rsp; // vm 커널모드에서 rsp를 참조할 수 있도록 업데이트
+
 	switch (syscall_num)
 	{
 	case SYS_HALT: // 0

@@ -43,19 +43,46 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
-	// return lazy_load_segment(page, file_page);
+	return lazy_load_segment(page, file_page);
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	{
+		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->ofs);
+		pml4_set_dirty(thread_current()->pml4, page->va, 0);
+	}
+
+	// 페이지와 프레임의 연결 끊기
+	page->frame->page = NULL;
+	page->frame = NULL;
+	pml4_clear_page(thread_current()->pml4, page->va);
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
+	// page struct를 해제할 필요는 없습니다. (file_backed_destroy의 호출자가 해야 함)
 	struct file_page *file_page UNUSED = &page->file;
+	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	{
+		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->ofs);
+		pml4_set_dirty(thread_current()->pml4, page->va, 0);
+	}
+	pml4_clear_page(thread_current()->pml4, page->va);
+
+	// 이 페이지에 매핑되었던 frame 구조체 반환
+	// lock_acquire(&frame_table_lock);
+	// if (page->frame)
+	// {
+	// 	list_remove(&page->frame->frame_elem); // frame_table에서 삭제
+	// 	free(page->frame);
+	// }
+	// lock_release(&frame_table_lock);
 }
 
 /* Do the mmap */

@@ -198,8 +198,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
     {
         void *rsp = user ? f->rsp : thread_current()->rsp;
 
-        // 스택 확장 여부를 판단하는 조건문 간소화
-        if (rsp >= USER_STACK - (1 << 20) && addr <= USER_STACK && (rsp - 8 == addr || rsp == addr))
+        if ((USER_STACK - (1 << 20) <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK) || (USER_STACK - (1 << 20) <= rsp && rsp <= addr && addr <= USER_STACK))
         {
             // 스택 확장을 위해 vm_stack_growth 호출
             vm_stack_growth(addr);
