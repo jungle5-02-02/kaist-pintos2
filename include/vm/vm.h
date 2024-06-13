@@ -67,7 +67,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
-	struct hash_elem frame_hash_elem;
+	struct list_elem frame_list_elem;
 	int accessed;
 };
 
@@ -95,7 +95,7 @@ struct supplemental_page_table {
 };
 
 struct frame_table {
-	struct hash ft_hash;
+	struct list ft_list;
 };
 
 #include "threads/thread.h"
@@ -120,12 +120,14 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
+int lcg_state;
+
 uint64_t my_hash_func (const struct hash_elem *e, void *aux);
 bool my_hash_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
-
 void hash_page_destroy(struct hash_elem *e, void *aux);
 
 struct frame_table frame_table;
 struct lock frame_table_lock;
+struct lock swap_table_lock;
 
 #endif  /* VM_VM_H */

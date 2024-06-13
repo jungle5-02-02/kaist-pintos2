@@ -25,6 +25,7 @@
 
 #ifdef VM
 #include "vm/vm.h"
+#include "vm/file.h"
 #endif
 
 static void process_cleanup(void);
@@ -779,7 +780,7 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct lazy_load_arg *load_info = (struct lazy_load_arg *) aux;
+	struct file_page *load_info = (struct file_page *) aux;
 	file_seek(load_info->file, load_info->ofs);
 	/* Load this page. */
 	if (file_read(load_info->file, page->frame->kva, load_info->read_bytes) != (int)load_info->read_bytes)
@@ -829,7 +830,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		// printf("now in load segment\n");
 		// printf("aux malloc");
 		// printf(" ok\n");
-		struct lazy_load_arg *aux = (struct lazy_load_arg *)calloc(1,sizeof(struct lazy_load_arg));
+		struct file_page *aux = (struct file_page *)calloc(1,sizeof(struct file_page));
 		aux->file = file;
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
